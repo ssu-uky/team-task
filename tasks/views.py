@@ -116,7 +116,7 @@ class TaskDetailView(APIView):
 
         if request.user != task.create_user:
             return Response(
-                {"message": "생성자만 수정할 수 있습니다."},
+                {"message": "작성자만 수정할 수 있습니다."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
@@ -147,7 +147,7 @@ class TaskDetailView(APIView):
 
         if request.user != task.create_user:
             return Response(
-                {"message": "생성자만 삭제할 수 있습니다."},
+                {"message": "작성자만 삭제할 수 있습니다."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
