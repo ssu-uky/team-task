@@ -5,7 +5,14 @@ from rest_framework.response import Response
 from rest_framework.exceptions import NotFound
 
 from .models import Task
-from .serializers import CreateTaskSerializer, TaskSerializer
+from .serializers import (
+    CreateTaskSerializer,
+    TaskSerializer,
+    TinyTaskSerializer,
+    SubTaskSerializer,
+    NewSubTaskSerializer,
+    TinySubTaskSerializer,
+)
 
 
 class CreateTaskView(APIView):
@@ -16,7 +23,7 @@ class CreateTaskView(APIView):
 
     def get(self, request):
         return Response(
-            {"message": " title과 content를 입력해주세요."},
+            {"message": "title과 content를 입력해주세요."},
             status=status.HTTP_200_OK,
         )
 
@@ -29,7 +36,7 @@ class CreateTaskView(APIView):
 
         create_task = {
             "task_pk": request.data.get("pk"),
-            "create_user": request.user.username,
+            "create_user": request.user,
             "team": request.user.team,
             "title": request.data.get("title"),
             "content": request.data.get("content"),
@@ -91,28 +98,35 @@ class TaskListView(APIView):
 
 class TaskDetailView(APIView):
     """
-    일정 상세 정보 API :: GET, PUT, DELETE
-    /api/v1/tasks/<int:pk>/
+    일정 상세 정보 API
+    GET, PUT, DELETE /api/v1/tasks/<int:task_pk>/
     """
 
     # permission_classes = [IsAuthenticated]
 
-    def get_object(self, pk):
+    def get_object(self, task_pk):
         try:
-            return Task.objects.get(pk=pk)
+            return Task.objects.get(pk=task_pk)
         except Task.DoesNotExist:
             raise NotFound("게시글을 찾을 수 없습니다.")
 
-    def get(self, request, pk):
-        task = self.get_object(pk)
+    def get(self, request, task_pk):
+        task = self.get_object(task_pk)
         serializer = TaskSerializer(task)
+
+        subtasks = task.subtasks.all()
+        subtask_serializer = SubTaskSerializer(subtasks, many=True)
+
         return Response(
-            serializer.data,
+            {
+                "task": serializer.data,
+                "subtask": subtask_serializer.data,
+            },
             status=status.HTTP_200_OK,
         )
 
-    def put(self, request, pk):
-        task = self.get_object(pk)
+    def put(self, request, task_pk):
+        task = self.get_object(task_pk)
 
         if request.user != task.create_user:
             return Response(
@@ -136,8 +150,8 @@ class TaskDetailView(APIView):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
-    def delete(self, request, pk):
-        task = self.get_object(pk)
+    def delete(self, request, task_pk):
+        task = self.get_object(task_pk)
 
         # if task.is_complete:
         #     return Response(
@@ -152,6 +166,142 @@ class TaskDetailView(APIView):
             )
 
         task.delete()
+        return Response(
+            {"message": "삭제되었습니다."},
+            status=status.HTTP_204_NO_CONTENT,
+        )
+
+
+class NewSubTaskView(APIView):
+    """
+    subtask 생성 API
+    POST /api/v1/tasks/<int:task_pk>/subtasks/new/
+    """
+    def get_object(self, task_pk):
+        try:
+            return Task.objects.get(pk=task_pk)
+        except:
+            raise NotFound("게시글을 찾을 수 없습니다.")
+
+    def get(self, request, task_pk):
+        task = self.get_object(task_pk)
+        serializer = TinyTaskSerializer(task)
+        message = "sub_title, sub_content, team을 입력해주세요."
+        return Response(
+            {
+                "task": serializer.data,
+                "message": message,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    def post(self, request, task_pk):
+        task = self.get_object(task_pk)
+
+        if request.user.team != task.create_user.team:
+            return Response(
+                {"message": "팀원만 등록할 수 있습니다."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        subtask_data = {
+            "subtask_pk": request.data.get("pk"),
+            "sub_title": request.data.get("sub_title"),
+            "sub_content": request.data.get("sub_content"),
+            "team": request.data.get("team"),
+        }
+
+        serializer = NewSubTaskSerializer(data=subtask_data)
+
+        if serializer.is_valid():
+            serializer.save(task=task)
+            return Response(
+                serializer.data,
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+
+class SubTaskListView(APIView):
+    """
+    task_pk에 해당하는 subtask 리스트 API
+    GET /api/v1/tasks/<int:task_pk>/subtasks/
+    """
+    
+    def get_object(self, task_pk):
+        try:
+            return Task.objects.get(pk=task_pk)
+        except:
+            raise NotFound("게시글을 찾을 수 없습니다.")
+
+    def get(self, request, task_pk):
+        task = self.get_object(task_pk)
+        subtasks = task.subtasks.all()
+        serializer = SubTaskSerializer(subtasks, many=True)
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK,
+        )
+
+
+class SubTaskDetailView(APIView):
+    """
+    subtask 상세 정보 API
+    GET, PUT, DELETE /api/v1/tasks/<int:task_pk>/subtasks/<int:subtask_pk>/
+    """
+
+    def get_object(self, task_pk, subtask_pk):
+        try:
+            return Task.objects.get(pk=task_pk).subtasks.get(pk=subtask_pk)
+        except:
+            raise NotFound("게시글을 찾을 수 없습니다.")
+
+    def get(self, request, task_pk, subtask_pk):
+        subtask = self.get_object(task_pk, subtask_pk)
+        serializer = SubTaskSerializer(subtask)
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK,
+        )
+
+    def put(self, request, task_pk, subtask_pk):
+        subtask = self.get_object(task_pk, subtask_pk)
+
+        if request.user != subtask.task.create_user:
+            return Response(
+                {"message": "작성자만 수정할 수 있습니다."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        serializer = SubTaskSerializer(
+            subtask,
+            data=request.data,
+            partial=True,
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return Response(
+                serializer.data,
+                status=status.HTTP_200_OK,
+            )
+        return Response(
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    def delete(self, request, task_pk, subtask_pk):
+        subtask = self.get_object(task_pk, subtask_pk)
+
+        if request.user != subtask.task.create_user:
+            return Response(
+                {"message": "작성자만 삭제할 수 있습니다."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        subtask.delete()
         return Response(
             {"message": "삭제되었습니다."},
             status=status.HTTP_204_NO_CONTENT,
