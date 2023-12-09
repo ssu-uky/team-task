@@ -42,6 +42,11 @@ class SubTask(models.Model):
         related_name="subtasks_teams",
         blank=True,
     )
+    subtask_create_user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="subtask_create_user",
+    )
     sub_title = models.CharField(max_length=255, blank=True, null=True)
     sub_content = models.TextField(blank=True, null=True)
 

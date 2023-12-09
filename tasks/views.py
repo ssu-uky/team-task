@@ -1,3 +1,5 @@
+from django.utils import timezone
+
 from rest_framework.views import APIView
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
@@ -9,9 +11,10 @@ from .serializers import (
     CreateTaskSerializer,
     TaskSerializer,
     TinyTaskSerializer,
+    TaskListSerializer,
     SubTaskSerializer,
     NewSubTaskSerializer,
-    TinySubTaskSerializer,
+    SubTaskListSerializer,
 )
 
 
@@ -64,11 +67,18 @@ class MyTaskListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        tasks = Task.objects.filter(create_user__team=request.user.team)
+        user_team = request.user.team
 
-        serializer = TaskSerializer(tasks, many=True)
+        # 내 팀이 포함된 Task 조회
+        tasks_my_team = Task.objects.filter(create_user__team=user_team).distinct()
+        tasks_serializer = TaskListSerializer(tasks_my_team, many=True)
+
+        # 내 팀이 포함된 SubTask 조회
+        subtasks_with_my_team = SubTask.objects.filter(team__name=user_team)
+        subtasks_serializer = SubTaskListSerializer(subtasks_with_my_team, many=True)
+
         return Response(
-            serializer.data,
+            {"tasks": tasks_serializer.data, "subtasks": subtasks_serializer.data},
             status=status.HTTP_200_OK,
         )
 
@@ -86,15 +96,27 @@ class TaskListView(APIView):
         team_name = request.query_params.get("team")
 
         if team_name:
-            tasks = Task.objects.filter(create_user__team=team_name)
-        else:
-            tasks = Task.objects.all()
+            # 특정 팀이 포함된 Task 조회
+            tasks_with_team = Task.objects.filter(create_user__team=team_name)
+            # 특정 팀이 포함된 SubTask 조회
+            subtasks_with_team = SubTask.objects.filter(team__name=team_name)
 
-        serializer = TaskSerializer(tasks, many=True)
-        return Response(
-            serializer.data,
-            status=status.HTTP_200_OK,
-        )
+            tasks_serializer = TaskListSerializer(tasks_with_team, many=True)
+            subtasks_serializer = SubTaskListSerializer(subtasks_with_team, many=True)
+
+            return Response(
+                {"tasks": tasks_serializer.data, "subtasks": subtasks_serializer.data},
+                status=status.HTTP_200_OK,
+            )
+        else:
+            # 모든 Task 조회
+            all_tasks = Task.objects.all()
+            tasks_serializer = TaskListSerializer(all_tasks, many=True)
+
+            return Response(
+                tasks_serializer.data,
+                status=status.HTTP_200_OK,
+            )
 
 
 class TaskDetailView(APIView):
@@ -141,15 +163,20 @@ class TaskDetailView(APIView):
             partial=True,
         )
         if serializer.is_valid():
-            serializer.save()
-            return Response(
-                serializer.data,
-                status=status.HTTP_200_OK,
+            task_completed_changed = (
+                serializer.validated_data.get("is_complete") != task.is_complete
             )
-        return Response(
-            serializer.errors,
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+
+            if task_completed_changed:
+                if serializer.validated_data.get("is_complete"):
+                    serializer.validated_data["completed_date"] = timezone.now()
+                else:
+                    serializer.validated_data["completed_date"] = None
+
+            serializer.save()
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, task_pk):
         task = self.get_object(task_pk)
@@ -216,7 +243,7 @@ class NewSubTaskView(APIView):
         serializer = NewSubTaskSerializer(data=subtask_data)
 
         if serializer.is_valid():
-            serializer.save(task=task)
+            serializer.save(task=task, subtask_create_user=request.user)
             return Response(
                 serializer.data,
                 status=status.HTTP_201_CREATED,
@@ -272,39 +299,74 @@ class SubTaskDetailView(APIView):
     def put(self, request, task_pk, subtask_pk):
         subtask = self.get_object(task_pk, subtask_pk)
 
-        if request.user != subtask.task.create_user:
+        if (
+            request.user.team != subtask.task.create_user.team
+            and not subtask.team.filter(name=request.user.team).exists()
+        ):
             return Response(
-                {"message": "작성자만 수정할 수 있습니다."},
-                status=status.HTTP_403_FORBIDDEN,
+                {"message": "수정 권한이 없습니다."}, status=status.HTTP_403_FORBIDDEN
             )
 
-        serializer = SubTaskSerializer(
-            subtask,
-            data=request.data,
-            partial=True,
-        )
-        if serializer.is_valid():
-            serializer.save()
-            return Response(
-                serializer.data,
-                status=status.HTTP_200_OK,
+        if subtask.is_complete:
+            if request.data.get("is_complete") is not None and not request.data.get(
+                "is_complete"
+            ):
+                # 완료 상태를 해제하는 경우에만 허용
+                serializer = SubTaskSerializer(
+                    subtask,
+                    data={"is_complete": False},
+                    partial=True,
+                )
+            else:
+                return Response(
+                    {"message": "완료된 SubTask는 수정할 수 없습니다."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        else:
+            serializer = SubTaskSerializer(
+                subtask,
+                data=request.data,
+                partial=True,
             )
-        return Response(
-            serializer.errors,
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+
+        if serializer.is_valid():
+            if serializer.validated_data.get("is_complete") != subtask.is_complete:
+                if serializer.validated_data.get("is_complete"):
+                    serializer.validated_data["completed_date"] = timezone.now()
+                else:
+                    serializer.validated_data["completed_date"] = None
+
+                serializer.save()
+
+                # Task 상태 업데이트
+                task = subtask.task
+                if all(sub.is_complete for sub in task.subtasks.all()):
+                    task.is_complete = True
+                    task.completed_date = timezone.now()
+                else:
+                    task.is_complete = False
+                    task.completed_date = None
+                task.save()
+
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def delete(self, request, task_pk, subtask_pk):
         subtask = self.get_object(task_pk, subtask_pk)
 
-        if request.user != subtask.task.create_user:
+        if (
+            request.user.team != subtask.task.create_user.team
+            and not subtask.team.filter(name=request.user.team).exists()
+        ):
             return Response(
-                {"message": "작성자만 삭제할 수 있습니다."},
+                {"message": "삭제 권한이 없습니다."}, status=status.HTTP_403_FORBIDDEN
+            )
+
+        if subtask.is_complete:
+            return Response(
+                {"message": "완료된 SubTask는 삭제할 수 없습니다."},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
         subtask.delete()
-        return Response(
-            {"message": "삭제되었습니다."},
-            status=status.HTTP_204_NO_CONTENT,
-        )
+        return Response({"message": "삭제되었습니다."}, status=status.HTTP_204_NO_CONTENT)
