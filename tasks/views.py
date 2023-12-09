@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound
 
-from .models import Task
+from .models import Task, SubTask
 from .serializers import (
     CreateTaskSerializer,
     TaskSerializer,
@@ -65,6 +65,7 @@ class MyTaskListView(APIView):
 
     def get(self, request):
         tasks = Task.objects.filter(create_user__team=request.user.team)
+
         serializer = TaskSerializer(tasks, many=True)
         return Response(
             serializer.data,
@@ -177,6 +178,7 @@ class NewSubTaskView(APIView):
     subtask 생성 API
     POST /api/v1/tasks/<int:task_pk>/subtasks/new/
     """
+
     def get_object(self, task_pk):
         try:
             return Task.objects.get(pk=task_pk)
@@ -230,7 +232,7 @@ class SubTaskListView(APIView):
     task_pk에 해당하는 subtask 리스트 API
     GET /api/v1/tasks/<int:task_pk>/subtasks/
     """
-    
+
     def get_object(self, task_pk):
         try:
             return Task.objects.get(pk=task_pk)
@@ -255,7 +257,7 @@ class SubTaskDetailView(APIView):
 
     def get_object(self, task_pk, subtask_pk):
         try:
-            return Task.objects.get(pk=task_pk).subtasks.get(pk=subtask_pk)
+            return SubTask.objects.get(pk=subtask_pk)
         except:
             raise NotFound("게시글을 찾을 수 없습니다.")
 

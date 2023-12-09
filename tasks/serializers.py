@@ -59,11 +59,13 @@ class TaskSerializer(serializers.ModelSerializer):
     team = serializers.CharField(source="create_user.team", read_only=True)
     created_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", read_only=True)
     modified_at = serializers.DateTimeField(format="%Y-%m-%d %H:%M:%S", read_only=True)
+    total_subtasks = serializers.SerializerMethodField()
 
     class Meta:
         model = Task
         fields = (
             "task_pk",
+            "total_subtasks",
             "team",
             "create_user",
             "title",
@@ -84,6 +86,9 @@ class TaskSerializer(serializers.ModelSerializer):
 
     def get_task_pk(self, obj):
         return obj.pk
+
+    def get_total_subtasks(self, obj):
+        return obj.subtasks.count()
 
 
 class SubTaskSerializer(serializers.ModelSerializer):
@@ -132,13 +137,13 @@ class NewSubTaskSerializer(serializers.ModelSerializer):
             "is_complete",
             "completed_date",
         )
-    
+
     # def get_task_pk(self, obj):
     #     return obj.task.pk
 
     def get_subtask_pk(self, obj):
         return obj.pk
-    
+
     # def create(self, validated_data):
     #     task = validated_data.get("task")
     #     team = validated_data.get("team")
