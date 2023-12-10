@@ -29,6 +29,60 @@ def create_task(create_user):
     return create_user, task
 
 
+@pytest.fixture()
+def create_task_with_user(django_user_model):
+    user = django_user_model.objects.create_user(
+        username="testuser2",
+        password="testpassword2",
+        team=User.TeamChoices.Danbi,
+    )
+    task = Task.objects.create(
+        title="Task 제목",
+        content="Task 내용",
+        create_user=user,
+    )
+
+    team_values = [User.TeamChoices.Danbi.value, User.TeamChoices.Supie.value]
+
+    subtask = SubTask.objects.create(
+        sub_title="SubTask 제목",
+        sub_content="SubTask 내용",
+        task=task,
+        subtask_create_user=user,
+    )
+    subtask.team.set(team_values)
+
+    return user, task, subtask
+
+
+@pytest.fixture()
+def subtask_with_user(django_user_model):
+    user = django_user_model.objects.create_user(
+        username="subtaskuser",
+        password="subtask123",
+        team=User.TeamChoices.Danbi,
+    )
+    task = Task.objects.create(
+        title="Task 제목",
+        content="Task 내용",
+        create_user=user,
+    )
+
+    team_danbi, _ = Team.objects.get_or_create(name=User.TeamChoices.Danbi)
+    team_supie, _ = Team.objects.get_or_create(name=User.TeamChoices.Supie)
+    team_values = [team_danbi.id, team_supie.id]
+
+    subtask = SubTask.objects.create(
+        sub_title="SubTask 제목",
+        sub_content="SubTask 내용",
+        task=task,
+        subtask_create_user=user,
+    )
+    subtask.team.set(team_values)
+
+    return user, task, subtask
+
+
 # Task testcode
 
 
@@ -176,25 +230,137 @@ def test_task_owner_delete(create_task):
 
 
 # SubTask testcode
-@pytest.fixture()
-def create_teams(django_user_model):
-    team_objects = {}
-    for team_name in User.TeamChoices.values:
-        team, created = Team.objects.get_or_create(name=team_name)
-        team_objects[team_name] = team
-    return team_objects
 
 
-@pytest.fixture()
-def create_task_with_user(django_user_model):
-    user = django_user_model.objects.create_user(
-        username="testuser2",
-        password="testpassword2",
-        team=User.TeamChoices.Danbi,
+@pytest.mark.django_db
+def test_new_subtask_view_get_success(create_task):
+    """
+    존재하는 태스크에 대한 GET 요청 테스트
+    """
+    _, task = create_task
+    url = reverse("new-subtask", args=[task.pk])
+    response = client.get(url)
+    assert response.status_code == status.HTTP_200_OK
+    assert "task" in response.data
+    assert "message" in response.data
+
+
+@pytest.mark.django_db
+def test_new_subtask_view_get_not_found():
+    """
+    존재하지 않는 태스크에 대한 GET 요청 테스트
+    """
+    url = reverse("new-subtask", args=[999])  # 존재하지 않는 task_pk
+    response = client.get(url)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+def test_new_subtask_view_post_success(subtask_with_user, create_user):
+    """
+    같은 팀 사용자에 의한 POST 요청 성공 테스트
+    """
+    pass
+
+
+@pytest.mark.django_db
+def test_new_subtask_view_post_forbidden(subtask_with_user, django_user_model):
+    """
+    다른 팀 사용자에 의한 POST 요청 실패 테스트
+    """
+    pass
+
+
+@pytest.mark.django_db
+def test_new_subtask_view_post_bad_request(create_task):
+    """
+    필수 데이터 누락으로 인한 POST 요청 실패 테스트
+    """
+    _, task = create_task
+    client.login(username="testuser", password="test123")
+    url = reverse("new-subtask", args=[task.pk])
+    data = {
+        "sub_title": "새 서브태스크",
+        # sub_content 누락
+    }
+    response = client.post(url, data)
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+
+
+@pytest.mark.django_db
+def test_new_subtask_view_post_not_found():
+    """
+    존재하지 않는 태스크에 대한 POST 요청 테스트
+    """
+    client.login(username="testuser", password="test123")
+    url = reverse("new-subtask", args=[999])  # 존재하지 않는 task_pk
+    data = {"sub_title": "새 서브태스크", "sub_content": "서브태스크 내용", "team": ["SomeTeam"]}
+    response = client.post(url, data)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+def test_subtask_detail_view_get_success(subtask_with_user):
+    """
+    존재하는 서브태스크에 대한 GET 요청 테스트
+    """
+    user, task, subtask = subtask_with_user
+    client.login(username="subtaskuser", password="subtask123")
+    url = reverse("subtask-detail", args=[task.pk, subtask.pk])
+    response = client.get(url)
+    assert response.status_code == status.HTTP_200_OK
+    assert response.data["sub_title"] == subtask.sub_title
+
+
+@pytest.mark.django_db
+def test_subtask_detail_view_get_not_found(subtask_with_user):
+    """
+    존재하지 않는 서브태스크에 대한 GET 요청 테스트
+    """
+    user, task, _ = subtask_with_user
+    client.login(username="subtaskuser", password="subtask123")
+    url = reverse("subtask-detail", args=[task.pk, 999])  # 존재하지 않는 subtask_pk
+    response = client.get(url)
+    assert response.status_code == status.HTTP_404_NOT_FOUND
+
+
+@pytest.mark.django_db
+def test_subtask_detail_view_put_success(subtask_with_user):
+    """
+    서브태스크 수정 테스트
+    """
+    user, task, subtask = subtask_with_user
+    client.login(username="subtaskuser", password="subtask123")
+    url = reverse("subtask-detail", args=[task.pk, subtask.pk])
+    updated_data = {"sub_title": "Updated SubTask"}
+    response = client.put(url, updated_data, format="json")
+    assert response.status_code == status.HTTP_200_OK
+    subtask.refresh_from_db()
+    assert subtask.sub_title == "Updated SubTask"
+
+
+@pytest.mark.django_db
+def test_subtask_detail_view_put_forbidden(subtask_with_user, django_user_model):
+    """
+    detail put 권한 없는 유저가 수정을 시도하는 경우
+    """
+    user, task, subtask = subtask_with_user
+
+    other_user = django_user_model.objects.create_user(
+        username="otheruser", password="otherpass", team="OtherTeam"
     )
-    task = Task.objects.create(
-        title="Task for SubTask",
-        content="Task Content",
-        create_user=user,
-    )
-    return user, task
+    client.login(username="otheruser", password="otherpass")
+    url = reverse("subtask-detail", args=[task.pk, subtask.pk])
+    updated_data = {"sub_title": "Updated SubTask"}
+    response = client.put(url, updated_data, format="json")
+    assert response.status_code == status.HTTP_403_FORBIDDEN
+
+
+@pytest.mark.django_db
+def test_subtask_detail_view_delete_success(subtask_with_user):
+    user, task, subtask = subtask_with_user
+    client.login(username="subtaskuser", password="subtask123")
+    url = reverse("subtask-detail", args=[task.pk, subtask.pk])
+    response = client.delete(url, format="json")
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    assert not SubTask.objects.filter(pk=subtask.pk).exists()
