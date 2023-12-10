@@ -256,11 +256,26 @@ def test_new_subtask_view_get_not_found():
 
 
 @pytest.mark.django_db
-def test_new_subtask_view_post_success(subtask_with_user, create_user):
+def test_new_subtask_view_post_success(subtask_with_user):
     """
     같은 팀 사용자에 의한 POST 요청 성공 테스트
     """
-    pass
+    user, task, subtask = subtask_with_user
+    client.login(username="subtaskuser", password="subtask123")
+    url = reverse("new-subtask", args=[task.pk])
+
+    team_names = [team.name for team in subtask.team.all()]
+    print("팀 이름:", team_names)
+
+    data = {
+        "sub_title": "새 서브태스크",
+        "sub_content": "새 서브태스크 내용",
+        "team": team_names,
+    }
+    response = client.post(url, data, format="json")
+    print(response.data)
+    assert response.status_code == status.HTTP_201_CREATED
+    assert SubTask.objects.filter(sub_title="새 서브태스크").exists()
 
 
 @pytest.mark.django_db
@@ -268,7 +283,19 @@ def test_new_subtask_view_post_forbidden(subtask_with_user, django_user_model):
     """
     다른 팀 사용자에 의한 POST 요청 실패 테스트
     """
-    pass
+    user, task, subtask = subtask_with_user
+    other_user = django_user_model.objects.create_user(
+        username="otheruser", password="otherpass", team="OtherTeam"
+    )
+    client.login(username="otheruser", password="otherpass")
+    url = reverse("new-subtask", args=[task.pk])
+    data = {
+        "sub_title": "새 서브태스크",
+        "sub_content": "새 서브태스크 내용",
+        "team": ["OtherTeam"],
+    }
+    response = client.post(url, data, format="json")
+    assert response.status_code == status.HTTP_403_FORBIDDEN
 
 
 @pytest.mark.django_db
@@ -358,6 +385,9 @@ def test_subtask_detail_view_put_forbidden(subtask_with_user, django_user_model)
 
 @pytest.mark.django_db
 def test_subtask_detail_view_delete_success(subtask_with_user):
+    """
+    서브태스크 삭제 테스트
+    """
     user, task, subtask = subtask_with_user
     client.login(username="subtaskuser", password="subtask123")
     url = reverse("subtask-detail", args=[task.pk, subtask.pk])
