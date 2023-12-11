@@ -239,7 +239,58 @@ Vary: Accept
 
 ---
 
-### 3. my task list (My Team Task List) - `GET`
+
+### 3. task list (Team Task List) - `GET`
+#### 조회하는 팀의 포함된 모든 task, subtask 리스트 조회
+<br>
+http://127.0.0.1:8000/api/v1/tasks/?team=Supie
+http://127.0.0.1:8000/api/v1/tasks/?team=팀이름
+
+```py
+HTTP 200 OK
+Allow: GET, HEAD, OPTIONS
+Content-Type: application/json
+Vary: Accept
+
+{
+    "tasks": [
+        {
+            "task_pk": 4,
+            "team": "Supie",
+            "title": "task 제목",
+            "is_complete": true,
+            "total_subtasks": 2
+        }
+    ],
+    "subtasks": [
+        {
+            "task_team": "Haetae",
+            "task_pk": 3,
+            "subtask_pk": 2,
+            "team": [
+                "Danbi",
+                "Supie"
+            ],
+            "sub_title": "두번째 제목",
+            "is_complete": false
+        },
+        {
+            "task_team": "Haetae",
+            "task_pk": 3,
+            "subtask_pk": 7,
+            "team": [
+                "Supie"
+            ],
+            "sub_title": "하위 제목",
+            "is_complete": true
+        }
+    ]
+}
+```
+
+---
+
+### 4. my task list (My Team Task List) - `GET`
 #### 내 팀이 포함된 모든 task, subtask 리스트 조회
 <br>
 http://127.0.0.1:8000/api/v1/tasks/myteam/
@@ -288,7 +339,7 @@ Vary: Accept
 
 ---
 
-### 4. task 상세 조회, 수정, 삭제 (Task Detail) - `GET` , `PUT` , `DELETE`
+### 5. task 상세 조회, 수정, 삭제 (Task Detail) - `GET` , `PUT` , `DELETE`
 http://127.0.0.1:8000/api/v1/tasks/<int:task_pk>/
 http://127.0.0.1:8000/api/v1/tasks/3/
 
@@ -442,7 +493,7 @@ Vary: Accept
 
 ---
 
-### 5. task의 새로운 subtask 등록 (New Subtask) - `POST`
+### 6. task의 새로운 subtask 등록 (New Subtask) - `POST`
 http://127.0.0.1:8000/api/v1/tasks/4/subtasks/new/
 http://127.0.0.1:8000/api/v1/tasks/<int:task_pk>/subtasks/new/
 
@@ -487,7 +538,7 @@ Vary: Accept
 
 ---
 
-### task에 할당 된 subtask 목록 조회 (Subtask List) - `GET`
+### 7. task에 할당 된 subtask 목록 조회 (Subtask List) - `GET`
 http://127.0.0.1:8000/api/v1/tasks/4/subtasks/
 http://127.0.0.1:8000/api/v1/tasks/<int:task_pk>/subtasks/
 
@@ -527,7 +578,7 @@ Vary: Accept
 
 ---
 
-### task에 할당 된 subtask의 내용 상세조회, 수정, 삭제 (Subtask Detail) - `GET`, `PUT`, `DELETE`
+### 8. task에 할당 된 subtask의 내용 상세조회, 수정, 삭제 (Subtask Detail) - `GET`, `PUT`, `DELETE`
 http://127.0.0.1:8000/api/v1/tasks/4/subtasks/9/
 http://127.0.0.1:8000/api/v1/tasks/<int:task_pk>/subtasks/<int:subtask_pk>/
 
