@@ -1,3 +1,33 @@
+## 목차
+- [개요](#개요)
+- [요구사항](#요구사항)
+- [Skills](#skills)
+- [Installation](#installation)
+- [Test Code](#test-code)
+- [API Reference](#api-reference)
+- [Issue](#issue)
+
+<br>
+
+## 개요
+업무(Task)를 진행하기 위해 협업을 요청하려고 합니다. <br>
+협업이 필요한 팀을 하위업무로 설정하고 권한을 줍니다.
+
+<br>
+
+---
+
+## 요구사항
+- 업무조회 시 하위업무에 본인 팀이 포함되어 있다면 업무 목록에서 함께 조회가 가능해야합니다.
+- 업무 조회 시 하위업무의 업무 처리 여부를 확인할 수 있어야합니다.
+- 업무는 작성자 이외에 수정이 불가합니다.
+- 업무에 할당 된 하위업무의 팀은 수정과 변경이 가능해야합니다. 단, 해당 하위업무가 완료되었다면 삭제되지 않아야합니다.
+- 하위업무가 완료되면 해당 상위업무는 자동으로 완료처리가 되어야합니다.
+- 하위업무 완료처리는 소속된 팀만 처리가 가능합니다.
+
+<br>
+
+---
 
 ## Skills
 <img src="https://img.shields.io/badge/Python-3776AB?style=flat&logo=Python&logoColor=white"/>&nbsp;
@@ -6,6 +36,8 @@
 <img src="https://img.shields.io/badge/Pytest-0A9EDC?style=flat&logo=SQLite&logoColor=white"/>
 
 <br>
+
+---
 
 ## Installation
 가상환경 진입 후, 패키지 다운로드
@@ -56,6 +88,8 @@ python manage.py shell
 
 <br>
 
+---
+
 ## Test Code
 
 ```
@@ -78,9 +112,9 @@ pytest tasks/tests.py
 
 </details>
 
-
 <br>
 
+---
 
 ## API Reference
 
@@ -646,3 +680,8 @@ Vary: Accept
 ```
 
 </details>
+
+---
+
+## Issue
+[Shell로 데이터 넣기](https://velog.io/@ssu-uky/Django-migration-%EC%98%A4%EB%A5%98-%EB%82%A0-%EA%B2%BD%EC%9A%B0-shell%EB%A1%9C-%EB%8D%B0%EC%9D%B4%ED%84%B0-%EB%84%A3%EA%B8%B0)
